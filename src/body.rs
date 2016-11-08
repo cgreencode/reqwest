@@ -1,12 +1,10 @@
 use std::io::Read;
 
-/// Body type for a request.
 pub struct Body {
     reader: Kind,
 }
 
 impl Body {
-    /// Instantiate a `Body` from a reader.
     pub fn new<R: Read + 'static>(reader: R) -> Body {
         Body {
             reader: Kind::Reader(Box::new(reader), None),

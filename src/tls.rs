@@ -3,14 +3,13 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use hyper::net::{SslClient, HttpStream, NetworkStream};
-use native_tls::{TlsConnector, TlsStream as NativeTlsStream, HandshakeError};
+use native_tls::{ClientBuilder, TlsStream as NativeTlsStream, HandshakeError};
 
-pub struct TlsClient(TlsConnector);
+pub struct TlsClient(ClientBuilder);
 
 impl TlsClient {
     pub fn new() -> ::Result<TlsClient> {
-        TlsConnector::builder()
-            .and_then(|c| c.build())
+        ClientBuilder::new()
             .map(TlsClient)
             .map_err(|e| ::Error::Http(::hyper::Error::Ssl(Box::new(e))))
     }
@@ -20,7 +19,7 @@ impl SslClient for TlsClient {
     type Stream = TlsStream;
 
     fn wrap_client(&self, stream: HttpStream, host: &str) -> ::hyper::Result<Self::Stream> {
-        self.0.connect(host, stream).map(TlsStream).map_err(|e| {
+        self.0.handshake(host, stream).map(TlsStream).map_err(|e| {
             match e {
                 HandshakeError::Failure(e) => ::hyper::Error::Ssl(Box::new(e)),
                 HandshakeError::Interrupted(..) => {
