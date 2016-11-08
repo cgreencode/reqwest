@@ -195,8 +195,8 @@ impl<'a> RequestBuilder<'a> {
                 let mut req = client.inner.request(method.clone(), url.clone())
                     .headers(headers.clone());
 
-                if let Some(ref b) = body {
-                    let body = body::as_hyper_body(&b);
+                if let Some(ref mut b) = body {
+                    let body = body::as_hyper_body(b);
                     req = req.body(body);
                 }
 
@@ -206,7 +206,8 @@ impl<'a> RequestBuilder<'a> {
 
             match res.status {
                 StatusCode::MovedPermanently |
-                StatusCode::Found => {
+                StatusCode::Found |
+                StatusCode::SeeOther => {
 
                     //TODO: turn this into self.redirect_policy.check()
                     if redirect_count > 10 {
