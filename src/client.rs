@@ -7,7 +7,7 @@ use hyper::status::StatusCode;
 use hyper::version::HttpVersion;
 use hyper::{Url};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_urlencoded;
 
@@ -275,6 +275,11 @@ impl Response {
     pub fn version(&self) -> &HttpVersion {
         &self.inner.version
     }
+
+    /// Try and deserialize the response body as JSON.
+    pub fn json<T: Deserialize>(&mut self) -> ::Result<T> {
+        serde_json::from_reader(self).map_err(::Error::from)
+    }
 }
 
 /// Read the body of the Response.
@@ -286,11 +291,11 @@ impl Read for Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ::body;
     use hyper::method::Method;
     use hyper::Url;
     use hyper::header::{Host, Headers, ContentType};
     use std::collections::HashMap;
-    use std::io::Read;
     use serde_urlencoded;
     use serde_json;
 
@@ -373,8 +378,7 @@ mod tests {
 
         r = r.body(body);
 
-        let mut buf = String::new();
-        r.body.unwrap().unwrap().read_to_string(&mut buf).unwrap();
+        let buf = body::read_to_string(r.body.unwrap().unwrap()).unwrap();
 
         assert_eq!(buf, body);
     }
@@ -393,8 +397,7 @@ mod tests {
         // Make sure the content type was set
         assert_eq!(r.headers.get::<ContentType>(), Some(&ContentType::form_url_encoded()));
 
-        let mut buf = String::new();
-        r.body.unwrap().unwrap().read_to_string(&mut buf).unwrap();
+        let buf = body::read_to_string(r.body.unwrap().unwrap()).unwrap();
 
         let body_should_be = serde_urlencoded::to_string(&form_data).unwrap();
         assert_eq!(buf, body_should_be);
@@ -414,8 +417,7 @@ mod tests {
         // Make sure the content type was set
         assert_eq!(r.headers.get::<ContentType>(), Some(&ContentType::json()));
 
-        let mut buf = String::new();
-        r.body.unwrap().unwrap().read_to_string(&mut buf).unwrap();
+        let buf = body::read_to_string(r.body.unwrap().unwrap()).unwrap();
 
         let body_should_be = serde_json::to_string(&json_data).unwrap();
         assert_eq!(buf, body_should_be);
