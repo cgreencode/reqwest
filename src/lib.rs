@@ -91,7 +91,7 @@
 extern crate hyper;
 
 #[macro_use] extern crate log;
-extern crate native_tls;
+extern crate hyper_native_tls;
 extern crate serde;
 extern crate serde_json;
 extern crate serde_urlencoded;
@@ -100,7 +100,6 @@ extern crate url;
 pub use hyper::client::IntoUrl;
 pub use hyper::Error as HyperError;
 pub use hyper::header;
-pub use hyper::mime;
 pub use hyper::method::Method;
 pub use hyper::status::StatusCode;
 pub use hyper::version::HttpVersion;
@@ -116,7 +115,6 @@ mod body;
 mod client;
 mod error;
 mod redirect;
-mod tls;
 
 
 /// Shortcut method to quickly make a `GET` request.
