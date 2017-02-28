@@ -14,7 +14,6 @@ fn test_get() {
             Host: $HOST\r\n\
             User-Agent: $USERAGENT\r\n\
             Accept: */*\r\n\
-            Accept-Encoding: gzip\r\n\
             \r\n\
             ",
         response: b"\
@@ -48,7 +47,6 @@ fn test_redirect_301_and_302_and_303_changes_post_to_get() {
                 Host: $HOST\r\n\
                 User-Agent: $USERAGENT\r\n\
                 Accept: */*\r\n\
-                Accept-Encoding: gzip\r\n\
                 Content-Length: 0\r\n\
                 \r\n\
                 ", code),
@@ -66,7 +64,6 @@ fn test_redirect_301_and_302_and_303_changes_post_to_get() {
                 Host: $HOST\r\n\
                 User-Agent: $USERAGENT\r\n\
                 Accept: */*\r\n\
-                Accept-Encoding: gzip\r\n\
                 Referer: http://$HOST/{}\r\n\
                 \r\n\
                 ", code),
@@ -97,7 +94,6 @@ fn test_redirect_307_and_308_tries_to_post_again() {
                 Host: $HOST\r\n\
                 User-Agent: $USERAGENT\r\n\
                 Accept: */*\r\n\
-                Accept-Encoding: gzip\r\n\
                 Content-Length: 5\r\n\
                 \r\n\
                 Hello\
@@ -116,7 +112,6 @@ fn test_redirect_307_and_308_tries_to_post_again() {
                 Host: $HOST\r\n\
                 User-Agent: $USERAGENT\r\n\
                 Accept: */*\r\n\
-                Accept-Encoding: gzip\r\n\
                 Referer: http://$HOST/{}\r\n\
                 Content-Length: 5\r\n\
                 \r\n\
@@ -150,7 +145,6 @@ fn test_redirect_307_does_not_try_if_reader_cannot_reset() {
                 Host: $HOST\r\n\
                 User-Agent: $USERAGENT\r\n\
                 Accept: */*\r\n\
-                Accept-Encoding: gzip\r\n\
                 Transfer-Encoding: chunked\r\n\
                 \r\n\
                 5\r\n\
@@ -183,7 +177,6 @@ fn test_redirect_policy_can_return_errors() {
             Host: $HOST\r\n\
             User-Agent: $USERAGENT\r\n\
             Accept: */*\r\n\
-            Accept-Encoding: gzip\r\n\
             \r\n\
             ",
         response: b"\
@@ -210,7 +203,6 @@ fn test_redirect_policy_can_stop_redirects_without_an_error() {
             Host: $HOST\r\n\
             User-Agent: $USERAGENT\r\n\
             Accept: */*\r\n\
-            Accept-Encoding: gzip\r\n\
             \r\n\
             ",
         response: b"\
@@ -240,7 +232,6 @@ fn test_accept_header_is_not_changed_if_set() {
             Host: $HOST\r\n\
             Accept: application/json\r\n\
             User-Agent: $USERAGENT\r\n\
-            Accept-Encoding: gzip\r\n\
             \r\n\
             ",
         response: b"\
@@ -254,36 +245,6 @@ fn test_accept_header_is_not_changed_if_set() {
 
     let res = client.get(&format!("http://{}/accept", server.addr()))
         .header(reqwest::header::Accept::json())
-        .send()
-        .unwrap();
-
-    assert_eq!(res.status(), &reqwest::StatusCode::Ok);
-}
-
-#[test]
-fn test_accept_encoding_header_is_not_changed_if_set() {
-    let server = server! {
-        request: b"\
-            GET /accept-encoding HTTP/1.1\r\n\
-            Host: $HOST\r\n\
-            Accept-Encoding: identity\r\n\
-            User-Agent: $USERAGENT\r\n\
-            Accept: */*\r\n\
-            \r\n\
-            ",
-        response: b"\
-            HTTP/1.1 200 OK\r\n\
-            Server: test-accept-encoding\r\n\
-            Content-Length: 0\r\n\
-            \r\n\
-            "
-    };
-    let client = reqwest::Client::new().unwrap();
-
-    let res = client.get(&format!("http://{}/accept-encoding", server.addr()))
-        .header(reqwest::header::AcceptEncoding(
-            vec![reqwest::header::qitem(reqwest::header::Encoding::Identity)]
-        ))
         .send()
         .unwrap();
 
@@ -315,7 +276,6 @@ fn test_gzip_response() {
             Host: $HOST\r\n\
             User-Agent: $USERAGENT\r\n\
             Accept: */*\r\n\
-            Accept-Encoding: gzip\r\n\
             \r\n\
             ",
         response: response
