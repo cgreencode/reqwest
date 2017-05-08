@@ -16,7 +16,7 @@ use serde_json;
 use serde_urlencoded;
 
 use ::body::{self, Body};
-use ::redirect::{self, RedirectPolicy, check_redirect};
+use ::redirect::{RedirectPolicy, check_redirect};
 use ::response::Response;
 
 static DEFAULT_USER_AGENT: &'static str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -36,7 +36,7 @@ pub struct Client {
 impl Client {
     /// Constructs a new `Client`.
     pub fn new() -> ::Result<Client> {
-        let mut client = try_!(new_hyper_client());
+        let mut client = try!(new_hyper_client());
         client.set_redirect_policy(::hyper::client::RedirectPolicy::FollowNone);
         Ok(Client {
             inner: Arc::new(ClientRef {
@@ -133,7 +133,7 @@ fn new_hyper_client() -> ::Result<::hyper::Client> {
         ::hyper::client::Pool::with_connector(
             Default::default(),
             ::hyper::net::HttpsConnector::new(
-                try_!(NativeTlsClient::new()
+                try!(NativeTlsClient::new()
                      .map_err(|e| ::hyper::Error::Ssl(Box::new(e)))))
         )
     ))
@@ -175,6 +175,14 @@ impl RequestBuilder {
         self
     }
 
+    /// Enable HTTP basic authentication.
+    pub fn basic_auth(self, username: String, password: Option<String>) -> RequestBuilder {
+        self.header(::header::Authorization(::header::Basic{
+            username: username,
+            password: password,
+        }))
+    }
+
     /// Set the request body.
     pub fn body<T: Into<Body>>(mut self, body: T) -> RequestBuilder {
         self.body = Some(Ok(body.into()));
@@ -198,7 +206,7 @@ impl RequestBuilder {
     ///     .send();
     /// ```
     pub fn form<T: Serialize>(mut self, form: &T) -> RequestBuilder {
-        let body = serde_urlencoded::to_string(form).map_err(::error::from);
+        let body = serde_urlencoded::to_string(form).map_err(::Error::from);
         self.headers.set(ContentType::form_url_encoded());
         self.body = Some(body.map(|b| b.into()));
         self
@@ -242,10 +250,10 @@ impl RequestBuilder {
         }
         let client = self.client;
         let mut method = self.method;
-        let mut url = try_!(self.url);
+        let mut url = try!(self.url);
         let mut headers = self.headers;
         let mut body = match self.body {
-            Some(b) => Some(try_!(b)),
+            Some(b) => Some(try!(b)),
             None => None,
         };
 
@@ -263,7 +271,7 @@ impl RequestBuilder {
                     req = req.body(body);
                 }
 
-                try_!(req.send(), &url)
+                try!(req.send())
             };
 
             let should_redirect = match res.status {
@@ -304,20 +312,12 @@ impl RequestBuilder {
                     Ok(loc) => {
                         headers.set(Referer(url.to_string()));
                         urls.push(url);
-                        let action = check_redirect(&client.redirect_policy.lock().unwrap(), &loc, &urls);
-                        match action {
-                            redirect::Action::Follow => loc,
-                            redirect::Action::Stop => {
-                                debug!("redirect_policy disallowed redirection to '{}'", loc);
+                        if check_redirect(&client.redirect_policy.lock().unwrap(), &loc, &urls)? {
+                            loc
+                        } else {
+                            debug!("redirect_policy disallowed redirection to '{}'", loc);
 
-                                return Ok(::response::new(res, client.auto_ungzip.load(Ordering::Relaxed)));
-                            },
-                            redirect::Action::LoopDetected => {
-                                return Err(::error::loop_detected(res.url.clone()));
-                            },
-                            redirect::Action::TooManyRedirects => {
-                                return Err(::error::too_many_redirects(res.url.clone()));
-                            }
+                            return Ok(::response::new(res, client.auto_ungzip.load(Ordering::Relaxed)));
                         }
                     },
                     Err(e) => {
