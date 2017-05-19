@@ -32,7 +32,3 @@ impl<'a> PolyfillTryInto for &'a String {
         Url::parse(self)
     }
 }
-
-pub fn to_uri(url: &Url) -> ::hyper::Uri {
-    url.as_str().parse().expect("a parsed Url should always be a valid Uri")
-}

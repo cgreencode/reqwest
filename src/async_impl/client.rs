@@ -14,10 +14,8 @@ use tokio_core::reactor::Handle;
 use super::body;
 use super::request::{self, Request, RequestBuilder};
 use super::response::{self, Response};
-use connect::Connector;
-use into_url::to_uri;
 use redirect::{self, RedirectPolicy, check_redirect, remove_sensitive_headers};
-use {Certificate, IntoUrl, Method, proxy, Proxy, StatusCode, Url};
+use {Certificate, IntoUrl, Method, StatusCode, Url};
 
 static DEFAULT_USER_AGENT: &'static str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -81,7 +79,6 @@ pub struct ClientBuilder {
 struct Config {
     gzip: bool,
     hostname_verification: bool,
-    proxies: Vec<Proxy>,
     redirect_policy: RedirectPolicy,
     referer: bool,
     timeout: Option<Duration>,
@@ -100,7 +97,6 @@ impl ClientBuilder {
             config: Some(Config {
                 gzip: true,
                 hostname_verification: true,
-                proxies: Vec::new(),
                 redirect_policy: RedirectPolicy::default(),
                 referer: true,
                 timeout: None,
@@ -131,9 +127,7 @@ impl ClientBuilder {
         }
         */
 
-        let proxies = Arc::new(config.proxies);
-
-        let hyper_client = create_hyper_client(tls, proxies.clone(), handle);
+        let hyper_client = create_hyper_client(tls, handle);
         //let mut hyper_client = create_hyper_client(tls_client);
 
         //hyper_client.set_read_timeout(config.timeout);
@@ -143,7 +137,6 @@ impl ClientBuilder {
             inner: Arc::new(ClientRef {
                 gzip: config.gzip,
                 hyper: hyper_client,
-                proxies: proxies,
                 redirect_policy: config.redirect_policy,
                 referer: config.referer,
             }),
@@ -194,13 +187,6 @@ impl ClientBuilder {
         self
     }
 
-    /// Add a `Proxy` to the list of proxies the `Client` will use.
-    #[inline]
-    pub fn proxy(&mut self, proxy: Proxy) -> &mut ClientBuilder {
-        self.config_mut().proxies.push(proxy);
-        self
-    }
-
     /// Set a `RedirectPolicy` for this client.
     ///
     /// Default will follow redirects up to a maximum of 10.
@@ -240,11 +226,14 @@ impl ClientBuilder {
     }
 }
 
-type HyperClient = ::hyper::Client<Connector>;
+type HyperClient = ::hyper::Client<::hyper_tls::HttpsConnector<::hyper::client::HttpConnector>>;
 
-fn create_hyper_client(tls: TlsConnector, proxies: Arc<Vec<Proxy>>, handle: &Handle) -> HyperClient {
+fn create_hyper_client(tls: TlsConnector, handle: &Handle) -> HyperClient {
+    let mut http = ::hyper::client::HttpConnector::new(4, handle);
+    http.enforce_http(false);
+    let https = ::hyper_tls::HttpsConnector::from((http, tls));
     ::hyper::Client::configure()
-        .connector(Connector::new(tls, proxies, handle))
+        .connector(https)
         .build(handle)
 }
 
@@ -374,18 +363,13 @@ impl Client {
             headers.set(AcceptEncoding(vec![qitem(Encoding::Gzip)]));
         }
 
-        let uri = to_uri(&url);
-        let mut req = ::hyper::Request::new(method.clone(), uri.clone());
+        let mut req = ::hyper::Request::new(method.clone(), url_to_uri(&url));
         *req.headers_mut() = headers.clone();
         let body = body.and_then(|body| {
             let (resuable, body) = body::into_hyper(body);
             req.set_body(body);
             resuable
         });
-
-        if proxy::is_proxied(&self.inner.proxies, &uri) {
-            req.set_proxy(true);
-        }
 
         let in_flight = self.inner.hyper.request(req);
 
@@ -424,7 +408,6 @@ impl fmt::Debug for ClientBuilder {
 struct ClientRef {
     gzip: bool,
     hyper: HyperClient,
-    proxies: Arc<Vec<Proxy>>,
     redirect_policy: RedirectPolicy,
     referer: bool,
 }
@@ -490,17 +473,13 @@ impl Future for Pending {
 
                             remove_sensitive_headers(&mut self.headers, &self.url, &self.urls);
                             debug!("redirecting to {:?} '{}'", self.method, self.url);
-                            let uri = to_uri(&self.url);
                             let mut req = ::hyper::Request::new(
                                 self.method.clone(),
-                                uri.clone()
+                                url_to_uri(&self.url)
                             );
                             *req.headers_mut() = self.headers.clone();
                             if let Some(ref body) = self.body {
                                 req.set_body(body.clone());
-                            }
-                            if proxy::is_proxied(&self.client.proxies, &uri) {
-                                req.set_proxy(true);
                             }
                             self.in_flight = self.client.hyper.request(req);
                             continue;
@@ -544,6 +523,10 @@ fn make_referer(next: &Url, previous: &Url) -> Option<Referer> {
     let _ = referer.set_password(None);
     referer.set_fragment(None);
     Some(Referer::new(referer.into_string()))
+}
+
+fn url_to_uri(url: &Url) -> ::hyper::Uri {
+    url.as_str().parse().expect("a parsed Url should always be a valid Uri")
 }
 
 // pub(crate)
