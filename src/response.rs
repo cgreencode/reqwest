@@ -87,31 +87,27 @@ impl Response {
         }
     }
 
-    /// Try and deserialize the response body as JSON using `serde`.
+    /// Try and deserialize the response body as JSON.
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # extern crate reqwest;
-    /// # #[macro_use] extern crate serde_derive;
-    /// #
-    /// # use reqwest::Error;
-    /// #
+    /// ```rust,no_run
+    /// extern crate reqwest;
+    /// #[macro_use]
+    /// extern crate serde_derive;
+    ///
     /// #[derive(Deserialize)]
-    /// struct Response {
-    ///     origin: String,
+    /// struct User {
+    ///     name: String,
+    ///     age: u8,
     /// }
     ///
-    /// # fn run() -> Result<(), Error> {
-    /// let resp: Response = reqwest::get("http://127.0.0.1/user.json")?.json()?;
-    /// # Ok(())
-    /// # }
-    /// #
-    /// # fn main() {
-    /// #     if let Err(error) = run() {
-    /// #         println!("Error: {:?}", error);
-    /// #     }
-    /// # }
+    /// fn main() {
+    ///     let user: User = reqwest::get("http://127.0.0.1/user.json")
+    ///         .expect("network error")
+    ///         .json()
+    ///         .expect("malformed json");
+    /// }
     /// ```
     #[inline]
     pub fn json<T: DeserializeOwned>(&mut self) -> ::Result<T> {

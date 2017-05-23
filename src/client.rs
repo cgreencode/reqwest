@@ -31,7 +31,7 @@ static DEFAULT_USER_AGENT: &'static str = concat!(env!("CARGO_PKG_NAME"), "/", e
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// # use reqwest::{Error, Client};
 /// #
 /// # fn run() -> Result<(), Error> {
@@ -182,18 +182,13 @@ pub struct RequestBuilder {
 impl RequestBuilder {
     /// Add a `Header` to this Request.
     ///
-    /// ```rust
-    /// # use reqwest::Error;
-    /// #
-    /// # fn run() -> Result<(), Error> {
+    /// ```no_run
     /// use reqwest::header::UserAgent;
-    /// let client = reqwest::Client::new()?;
+    /// let client = reqwest::Client::new().expect("client failed to construct");
     ///
     /// let res = client.get("https://www.rust-lang.org")
     ///     .header(UserAgent("foo".to_string()))
-    ///     .send()?;
-    /// # Ok(())
-    /// # }
+    ///     .send();
     /// ```
     pub fn header<H: ::header::Header + ::header::HeaderFormat>(mut self, header: H) -> RequestBuilder {
         self.headers.set(header);
@@ -208,10 +203,12 @@ impl RequestBuilder {
     }
 
     /// Enable HTTP basic authentication.
-    pub fn basic_auth(self, username: String, password: Option<String>) -> RequestBuilder {
+    pub fn basic_auth<U, P>(self, username: U, password: Option<P>) -> RequestBuilder
+            where U: Into<String>, P: Into<String>
+    {
         self.header(::header::Authorization(::header::Basic{
-            username: username,
-            password: password,
+            username: username.into(),
+            password: password.map(|p| p.into()),
         }))
     }
 
@@ -227,20 +224,15 @@ impl RequestBuilder {
     /// and also sets the `Content-Type: application/www-form-url-encoded`
     /// header.
     ///
-    /// ```rust
-    /// # use reqwest::Error;
+    /// ```no_run
     /// # use std::collections::HashMap;
-    /// #
-    /// # fn run() -> Result<(), Error> {
     /// let mut params = HashMap::new();
     /// params.insert("lang", "rust");
     ///
-    /// let client = reqwest::Client::new()?;
+    /// let client = reqwest::Client::new().unwrap();
     /// let res = client.post("http://httpbin.org")
     ///     .form(&params)
-    ///     .send()?;
-    /// # Ok(())
-    /// # }
+    ///     .send();
     /// ```
     pub fn form<T: Serialize>(mut self, form: &T) -> RequestBuilder {
         let body = serde_urlencoded::to_string(form).map_err(::error::from);
@@ -254,20 +246,15 @@ impl RequestBuilder {
     /// Sets the body to the JSON serialization of the passed value, and
     /// also sets the `Content-Type: application/json` header.
     ///
-    /// ```rust
-    /// # use reqwest::Error;
+    /// ```no_run
     /// # use std::collections::HashMap;
-    /// #
-    /// # fn run() -> Result<(), Error> {
     /// let mut map = HashMap::new();
     /// map.insert("lang", "rust");
     ///
-    /// let client = reqwest::Client::new()?;
+    /// let client = reqwest::Client::new().unwrap();
     /// let res = client.post("http://httpbin.org")
     ///     .json(&map)
-    ///     .send()?;
-    /// # Ok(())
-    /// # }
+    ///     .send();
     /// ```
     pub fn json<T: Serialize>(mut self, json: &T) -> RequestBuilder {
         let body = serde_json::to_vec(json).expect("serde to_vec cannot fail");

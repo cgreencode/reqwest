@@ -49,16 +49,11 @@
 //! including `String`, `Vec<u8>`, and `File`. If you wish to pass a custom
 //! Reader, you can use the `reqwest::Body::new()` constructor.
 //!
-//! ```rust
-//! # use reqwest::Error;
-//! #
-//! # fn run() -> Result<(), Error> {
-//! let client = reqwest::Client::new()?;
+//! ```no_run
+//! let client = reqwest::Client::new().unwrap();
 //! let res = client.post("http://httpbin.org/post")
 //!     .body("the exact body that is sent")
-//!     .send()?;
-//! # Ok(())
-//! # }
+//!     .send();
 //! ```
 //!
 //! ### Forms
@@ -69,18 +64,13 @@
 //! This can be an array of tuples, or a `HashMap`, or a custom type that
 //! implements [`Serialize`][serde].
 //!
-//! ```rust
-//! # use reqwest::Error;
-//! #
-//! # fn run() -> Result<(), Error> {
+//! ```no_run
 //! // This will POST a body of `foo=bar&baz=quux`
 //! let params = [("foo", "bar"), ("baz", "quux")];
-//! let client = reqwest::Client::new()?;
+//! let client = reqwest::Client::new().unwrap();
 //! let res = client.post("http://httpbin.org/post")
 //!     .form(&params)
-//!     .send()?;
-//! # Ok(())
-//! # }
+//!     .send();
 //! ```
 //!
 //! ### JSON
@@ -89,22 +79,17 @@
 //! a similar fashion the `form` method. It can take any value that can be
 //! serialized into JSON.
 //!
-//! ```rust
-//! # use reqwest::Error;
+//! ```no_run
 //! # use std::collections::HashMap;
-//! #
-//! # fn run() -> Result<(), Error> {
 //! // This will POST a body of `{"lang":"rust","body":"json"}`
 //! let mut map = HashMap::new();
 //! map.insert("lang", "rust");
 //! map.insert("body", "json");
 //!
-//! let client = reqwest::Client::new()?;
+//! let client = reqwest::Client::new().unwrap();
 //! let res = client.post("http://httpbin.org/post")
 //!     .json(&map)
-//!     .send()?;
-//! # Ok(())
-//! # }
+//!     .send();
 //! ```
 //!
 //! [hyper]: http://hyper.rs
@@ -174,31 +159,12 @@ mod response;
 ///
 /// # Examples
 ///
-/// ```rust
-/// # extern crate reqwest;
-/// # #[macro_use] extern crate error_chain;
-/// #
+/// ```no_run
 /// use std::io::Read;
 ///
-/// # error_chain! {
-/// #     foreign_links {
-/// #         Reqwest(reqwest::Error);
-/// #         Io(std::io::Error);
-/// #     }
-/// # }
-/// #
-/// # fn run() -> Result<()> {
 /// let mut result = String::new();
-/// reqwest::get("https://www.rust-lang.org")?
-///     .read_to_string(&mut result)?;
-/// # Ok(())
-/// # }
-/// #
-/// # fn main() {
-/// #    if let Err(error) = run() {
-/// #        println!("Error: {:?}", error);
-/// #    }
-/// # }
+/// reqwest::get("https://www.rust-lang.org").unwrap()
+///     .read_to_string(&mut result);
 /// ```
 pub fn get<T: IntoUrl>(url: T) -> ::Result<Response> {
     let client = try!(Client::new());
