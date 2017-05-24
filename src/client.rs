@@ -203,12 +203,10 @@ impl RequestBuilder {
     }
 
     /// Enable HTTP basic authentication.
-    pub fn basic_auth<U, P>(self, username: U, password: Option<P>) -> RequestBuilder
-            where U: Into<String>, P: Into<String>
-    {
+    pub fn basic_auth(self, username: String, password: Option<String>) -> RequestBuilder {
         self.header(::header::Authorization(::header::Basic{
-            username: username.into(),
-            password: password.map(|p| p.into()),
+            username: username,
+            password: password,
         }))
     }
 
