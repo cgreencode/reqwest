@@ -25,7 +25,7 @@ impl Error {
     /// The `'static` bounds allows using `downcast_ref` to check the
     /// details of the error.
     #[inline]
-    pub fn get_ref(&self) -> Option<&(StdError + 'static)> {
+    pub fn get_ref(&self) -> Option<&(StdError + Send + Sync + 'static)> {
         match self.kind {
             Kind::Http(ref e) => Some(e),
             Kind::UrlEncoded(ref e) => Some(e),
@@ -152,6 +152,7 @@ impl From<::hyper_native_tls::native_tls::Error> for Kind {
 
 pub struct InternalFrom<T>(pub T, pub Option<Url>);
 
+#[doc(hidden)] // https://github.com/rust-lang/rust/issues/42323
 impl From<InternalFrom<Error>> for Error {
     #[inline]
     fn from(other: InternalFrom<Error>) -> Error {
@@ -159,6 +160,7 @@ impl From<InternalFrom<Error>> for Error {
     }
 }
 
+#[doc(hidden)] // https://github.com/rust-lang/rust/issues/42323
 impl<T> From<InternalFrom<T>> for Error
 where
     T: Into<Kind>,
