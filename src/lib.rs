@@ -163,7 +163,7 @@ pub use url::ParseError as UrlError;
 pub use self::client::{Certificate, Client, ClientBuilder};
 pub use self::error::{Error, Result};
 pub use self::body::Body;
-pub use self::redirect::{RedirectAction, RedirectAttempt, RedirectPolicy};
+pub use self::redirect::RedirectPolicy;
 pub use self::request::{Request, RequestBuilder};
 pub use self::response::Response;
 
@@ -208,6 +208,16 @@ mod response;
 /// #    }
 /// # }
 /// ```
+///
+/// # Errors
+///
+/// This function fails if:
+///
+/// - native TLS backend cannot be initialized
+/// - supplied `Url` cannot be parsed
+/// - there was an error while sending request
+/// - redirect loop was detected
+/// - redirect limit was exhausted
 pub fn get<T: IntoUrl>(url: T) -> ::Result<Response> {
     Client::new()?
         .get(url)?
