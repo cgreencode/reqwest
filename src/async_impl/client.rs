@@ -14,64 +14,21 @@ use tokio_core::reactor::Handle;
 use super::body;
 use super::request::{self, Request, RequestBuilder};
 use super::response::{self, Response};
+use connect::Connector;
+use into_url::to_uri;
 use redirect::{self, RedirectPolicy, check_redirect, remove_sensitive_headers};
-use {Certificate, IntoUrl, Method, StatusCode, Url};
+use {Certificate, IntoUrl, Method, proxy, Proxy, StatusCode, Url};
 
 static DEFAULT_USER_AGENT: &'static str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
-/// A `Client` to make Requests with.
-///
-/// The Client has various configuration values to tweak, but the defaults
-/// are set to what is usually the most commonly desired value.
-///
-/// The `Client` holds a connection pool internally, so it is advised that
-/// you create one and reuse it.
-///
-/// # Examples
-///
-/// ```rust
-/// # use reqwest::{Error, Client};
-/// #
-/// # fn run() -> Result<(), Error> {
-/// let client = Client::new()?;
-/// let resp = client.get("http://httpbin.org/")?.send()?;
-/// #   drop(resp);
-/// #   Ok(())
-/// # }
-///
-/// ```
+/// An asynchornous `Client` to make Requests with.
 #[derive(Clone)]
 pub struct Client {
     inner: Arc<ClientRef>,
 }
 
 /// A `ClientBuilder` can be used to create a `Client` with  custom configuration:
-///
-/// - with hostname verification disabled
-/// - with one or multiple custom certificates
-///
-/// # Examples
-///
-/// ```
-/// # use std::fs::File;
-/// # use std::io::Read;
-/// # fn build_client() -> Result<(), Box<std::error::Error>> {
-/// // read a local binary DER encoded certificate
-/// let mut buf = Vec::new();
-/// File::open("my-cert.der")?.read_to_end(&mut buf)?;
-///
-/// // create a certificate
-/// let cert = reqwest::Certificate::from_der(&buf)?;
-///
-/// // get a client builder
-/// let client = reqwest::ClientBuilder::new()?
-///     .add_root_certificate(cert)?
-///     .build()?;
-/// # drop(client);
-/// # Ok(())
-/// # }
-/// ```
 pub struct ClientBuilder {
     config: Option<Config>,
 }
@@ -79,6 +36,7 @@ pub struct ClientBuilder {
 struct Config {
     gzip: bool,
     hostname_verification: bool,
+    proxies: Vec<Proxy>,
     redirect_policy: RedirectPolicy,
     referer: bool,
     timeout: Option<Duration>,
@@ -97,6 +55,7 @@ impl ClientBuilder {
             config: Some(Config {
                 gzip: true,
                 hostname_verification: true,
+                proxies: Vec::new(),
                 redirect_policy: RedirectPolicy::default(),
                 referer: true,
                 timeout: None,
@@ -120,23 +79,22 @@ impl ClientBuilder {
 
         let tls = try_!(config.tls.build());
 
-        /*
-        let mut tls_client = NativeTlsClient::from(tls_connector);
+        let proxies = Arc::new(config.proxies);
+
+        let mut connector = Connector::new(tls, proxies.clone(), handle);
         if !config.hostname_verification {
-            tls_client.danger_disable_hostname_verification(true);
+            connector.danger_disable_hostname_verification();
         }
-        */
 
-        let hyper_client = create_hyper_client(tls, handle);
-        //let mut hyper_client = create_hyper_client(tls_client);
-
-        //hyper_client.set_read_timeout(config.timeout);
-        //hyper_client.set_write_timeout(config.timeout);
+        let hyper_client = ::hyper::Client::configure()
+            .connector(connector)
+            .build(handle);
 
         Ok(Client {
             inner: Arc::new(ClientRef {
                 gzip: config.gzip,
                 hyper: hyper_client,
+                proxies: proxies,
                 redirect_policy: config.redirect_policy,
                 referer: config.referer,
             }),
@@ -187,6 +145,13 @@ impl ClientBuilder {
         self
     }
 
+    /// Add a `Proxy` to the list of proxies the `Client` will use.
+    #[inline]
+    pub fn proxy(&mut self, proxy: Proxy) -> &mut ClientBuilder {
+        self.config_mut().proxies.push(proxy);
+        self
+    }
+
     /// Set a `RedirectPolicy` for this client.
     ///
     /// Default will follow redirects up to a maximum of 10.
@@ -226,14 +191,11 @@ impl ClientBuilder {
     }
 }
 
-type HyperClient = ::hyper::Client<::hyper_tls::HttpsConnector<::hyper::client::HttpConnector>>;
+type HyperClient = ::hyper::Client<Connector>;
 
-fn create_hyper_client(tls: TlsConnector, handle: &Handle) -> HyperClient {
-    let mut http = ::hyper::client::HttpConnector::new(4, handle);
-    http.enforce_http(false);
-    let https = ::hyper_tls::HttpsConnector::from((http, tls));
+fn create_hyper_client(tls: TlsConnector, proxies: Arc<Vec<Proxy>>, handle: &Handle) -> HyperClient {
     ::hyper::Client::configure()
-        .connector(https)
+        .connector(Connector::new(tls, proxies, handle))
         .build(handle)
 }
 
@@ -363,13 +325,18 @@ impl Client {
             headers.set(AcceptEncoding(vec![qitem(Encoding::Gzip)]));
         }
 
-        let mut req = ::hyper::Request::new(method.clone(), url_to_uri(&url));
+        let uri = to_uri(&url);
+        let mut req = ::hyper::Request::new(method.clone(), uri.clone());
         *req.headers_mut() = headers.clone();
         let body = body.and_then(|body| {
             let (resuable, body) = body::into_hyper(body);
             req.set_body(body);
             resuable
         });
+
+        if proxy::is_proxied(&self.inner.proxies, &uri) {
+            req.set_proxy(true);
+        }
 
         let in_flight = self.inner.hyper.request(req);
 
@@ -408,6 +375,7 @@ impl fmt::Debug for ClientBuilder {
 struct ClientRef {
     gzip: bool,
     hyper: HyperClient,
+    proxies: Arc<Vec<Proxy>>,
     redirect_policy: RedirectPolicy,
     referer: bool,
 }
@@ -473,13 +441,17 @@ impl Future for Pending {
 
                             remove_sensitive_headers(&mut self.headers, &self.url, &self.urls);
                             debug!("redirecting to {:?} '{}'", self.method, self.url);
+                            let uri = to_uri(&self.url);
                             let mut req = ::hyper::Request::new(
                                 self.method.clone(),
-                                url_to_uri(&self.url)
+                                uri.clone()
                             );
                             *req.headers_mut() = self.headers.clone();
                             if let Some(ref body) = self.body {
                                 req.set_body(body.clone());
+                            }
+                            if proxy::is_proxied(&self.client.proxies, &uri) {
+                                req.set_proxy(true);
                             }
                             self.in_flight = self.client.hyper.request(req);
                             continue;
@@ -523,10 +495,6 @@ fn make_referer(next: &Url, previous: &Url) -> Option<Referer> {
     let _ = referer.set_password(None);
     referer.set_fragment(None);
     Some(Referer::new(referer.into_string()))
-}
-
-fn url_to_uri(url: &Url) -> ::hyper::Uri {
-    url.as_str().parse().expect("a parsed Url should always be a valid Uri")
 }
 
 // pub(crate)
