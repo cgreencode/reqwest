@@ -11,7 +11,7 @@
 //! to do for them.
 //!
 //! - Uses system-native TLS
-//! - Plain bodies, JSON, urlencoded, (TODO: multipart)
+//! - Plain bodies, JSON, urlencoded, multipart
 //! - Customizable redirect policy
 //! - Proxies
 //! - (TODO: Cookies)
@@ -127,6 +127,7 @@ extern crate hyper_tls;
 #[macro_use]
 extern crate log;
 extern crate libflate;
+extern crate mime_guess;
 extern crate native_tls;
 extern crate serde;
 extern crate serde_json;
@@ -135,6 +136,7 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_tls;
 extern crate url;
+extern crate uuid;
 
 pub use hyper::header;
 pub use hyper::mime;
@@ -158,6 +160,21 @@ pub use self::tls::Certificate;
 #[macro_use]
 mod error;
 
+mod async_impl;
+mod connect;
+mod body;
+mod client;
+mod into_url;
+mod multipart_;
+mod proxy;
+mod redirect;
+mod request;
+mod response;
+mod tls;
+mod wait;
+
+pub mod multipart;
+
 /// A set of unstable functionality.
 ///
 /// This module is only available when the `unstable` feature is enabled.
@@ -172,6 +189,7 @@ pub mod unstable {
         pub use ::async_impl::{
             Body,
             Chunk,
+            Decoder,
             Client,
             ClientBuilder,
             Request,
@@ -180,20 +198,6 @@ pub mod unstable {
         };
     }
 }
-
-
-mod async_impl;
-mod connect;
-mod body;
-mod client;
-mod into_url;
-mod proxy;
-mod redirect;
-mod request;
-mod response;
-mod tls;
-mod wait;
-
 
 /// Shortcut method to quickly make a `GET` request.
 ///
