@@ -52,6 +52,7 @@ pub struct Client {
 /// # }
 /// ```
 pub struct ClientBuilder {
+    gzip: bool,
     inner: async_impl::ClientBuilder,
     timeout: Option<Duration>,
 }
@@ -65,6 +66,7 @@ impl ClientBuilder {
     pub fn new() -> ::Result<ClientBuilder> {
         async_impl::ClientBuilder::new().map(|builder| ClientBuilder {
             inner: builder,
+            gzip: true,
             timeout: None,
         })
     }
@@ -148,6 +150,7 @@ impl ClientBuilder {
     #[inline]
     pub fn gzip(&mut self, enable: bool) -> &mut ClientBuilder {
         self.inner.gzip(enable);
+        self.gzip = enable;
         self
     }
 
@@ -309,6 +312,7 @@ impl fmt::Debug for ClientBuilder {
 
 #[derive(Clone)]
 struct ClientHandle {
+    gzip: bool,
     timeout: Option<Duration>,
     inner: Arc<InnerClientHandle>
 }
@@ -330,6 +334,7 @@ impl Drop for InnerClientHandle {
 impl ClientHandle {
     fn new(builder: &mut ClientBuilder) -> ::Result<ClientHandle> {
 
+        let gzip = builder.gzip;
         let timeout = builder.timeout;
         let mut builder = async_impl::client::take_builder(&mut builder.inner);
         let (tx, rx) = mpsc::unbounded();
@@ -378,6 +383,7 @@ impl ClientHandle {
 
 
         Ok(ClientHandle {
+            gzip: gzip,
             timeout: timeout,
             inner: inner_handle,
         })
@@ -406,7 +412,7 @@ impl ClientHandle {
             }
         };
         res.map(|res| {
-            response::new(res, self.timeout, KeepCoreThreadAlive(self.inner.clone()))
+            response::new(res, self.gzip, self.timeout, KeepCoreThreadAlive(self.inner.clone()))
         })
     }
 }

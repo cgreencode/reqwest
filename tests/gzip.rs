@@ -4,15 +4,12 @@ extern crate libflate;
 #[macro_use]
 mod support;
 
-use std::time::Duration;
 use std::io::{Read, Write};
 
 #[test]
 fn test_gzip_response() {
-    let content: String = (0..50).into_iter().map(|i| format!("test {}", i)).collect();
-    let chunk_size = content.len() / 3;
     let mut encoder = ::libflate::gzip::Encoder::new(Vec::new()).unwrap();
-    match encoder.write(content.as_bytes()) {
+    match encoder.write(b"test request") {
         Ok(n) => assert!(n > 0, "Failed to write to encoder."),
         _ => panic!("Failed to gzip encode string."),
     };
@@ -37,8 +34,6 @@ fn test_gzip_response() {
             Accept-Encoding: gzip\r\n\
             \r\n\
             ",
-        chunk_size: chunk_size,
-        write_timeout: Duration::from_millis(10),
         response: response
     };
     let mut res = reqwest::get(&format!("http://{}/gzip", server.addr())).unwrap();
@@ -46,7 +41,7 @@ fn test_gzip_response() {
     let mut body = String::new();
     res.read_to_string(&mut body).unwrap();
 
-    assert_eq!(body, content);
+    assert_eq!(body, "test request");
 }
 
 #[test]
