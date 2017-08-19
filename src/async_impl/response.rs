@@ -1,21 +1,15 @@
 use std::fmt;
-use std::mem;
-use std::io::{self, Read};
 use std::marker::PhantomData;
 
-use libflate::non_blocking::gzip;
-use tokio_io::AsyncRead;
-use tokio_io::io as async_io;
 use futures::{Async, Future, Poll, Stream};
 use futures::stream::Concat2;
+use header::Headers;
 use hyper::StatusCode;
 use serde::de::DeserializeOwned;
 use serde_json;
 use url::Url;
 
-use header::{Headers, ContentEncoding, ContentLength, Encoding, TransferEncoding};
-use super::{decoder, body, Body, Chunk, Decoder};
-use error;
+use super::{body, Body};
 
 
 /// A Response to a submitted `Request`.
@@ -23,7 +17,7 @@ pub struct Response {
     status: StatusCode,
     headers: Headers,
     url: Url,
-    body: Decoder,
+    body: Body,
 }
 
 impl Response {
@@ -51,29 +45,17 @@ impl Response {
         &mut self.headers
     }
 
-    /// Get a readable response body.
-    /// 
-    /// The response will be decoded.
+    /// Get a mutable reference to the `Body` of this `Response`.
     #[inline]
-    pub fn body_mut(&mut self) -> &mut Decoder {
+    pub fn body_mut(&mut self) -> &mut Body {
         &mut self.body
-    }
-
-    /// Get a readable response body.
-    /// 
-    /// This function will replace the body on the response with an empty one.
-    #[inline]
-    pub fn body(&self) -> &Decoder {
-        &self.body
     }
 
     /// Try to deserialize the response body as JSON using `serde`.
     #[inline]
     pub fn json<T: DeserializeOwned>(&mut self) -> Json<T> {
-        let body = mem::replace(&mut self.body, Decoder::empty());
-        
         Json {
-            concat: body.concat2(),
+            concat: body::take(self.body_mut()).concat2(),
             _marker: PhantomData,
         }
     }
@@ -113,6 +95,7 @@ impl Response {
     }
 }
 
+
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Response")
@@ -124,7 +107,7 @@ impl fmt::Debug for Response {
 }
 
 pub struct Json<T> {
-    concat: Concat2<Decoder>,
+    concat: Concat2<Body>,
     _marker: PhantomData<T>,
 }
 
@@ -147,15 +130,17 @@ impl<T> fmt::Debug for Json<T> {
 
 // pub(crate)
 
-pub fn new(mut res: ::hyper::client::Response, url: Url, gzip: bool) -> Response {
+pub fn new(mut res: ::hyper::client::Response, url: Url, _gzip: bool) -> Response {
+    use std::mem;
+
     let status = res.status();
-    let mut headers = mem::replace(res.headers_mut(), Headers::new());
-    let decoder = decoder::detect(&mut headers, body::wrap(res.body()), gzip);
+    let headers = mem::replace(res.headers_mut(), Headers::new());
+    let body = res.body();
     debug!("Response: '{}' for {}", status, url);
     Response {
         status: status,
         headers: headers,
         url: url,
-        body: decoder,
+        body: super::body::wrap(body),
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "reqwest"
-version = "0.7.2" # remember to update html_root_url
+version = "0.7.3" # remember to update html_root_url
 description = "higher level HTTP client library"
 keywords = ["http", "request", "client"]
 repository = "https://github.com/seanmonstar/reqwest"
@@ -14,7 +14,7 @@ bytes = "0.4"
 futures = "0.1.14"
 hyper = "0.11"
 hyper-tls = "0.1.2"
-libflate = "0.1.11"
+libflate = "0.1.5"
 log = "0.3"
 native-tls = "0.1.3"
 serde = "1.0"
