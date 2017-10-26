@@ -51,10 +51,7 @@ pub fn spawn(txns: Vec<Txn>) -> Server {
 
             let mut n = 0;
             while n < expected.len() {
-                match socket.read(&mut buf[n..]) {
-                    Ok(0) | Err(_) => break,
-                    Ok(nread) => n += nread,
-                }
+                n += socket.read(&mut buf).unwrap();
             }
 
             match (::std::str::from_utf8(&expected), ::std::str::from_utf8(&buf[..n])) {

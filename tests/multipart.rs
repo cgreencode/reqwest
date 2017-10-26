@@ -1,3 +1,4 @@
+extern crate env_logger;
 extern crate reqwest;
 
 #[macro_use]
@@ -5,6 +6,8 @@ mod support;
 
 #[test]
 fn test_multipart() {
+    let _ = env_logger::init();
+
     let form = reqwest::multipart::Form::new()
         .text("foo", "bar");
 
@@ -19,10 +22,10 @@ fn test_multipart() {
         request: format!("\
             POST /multipart/1 HTTP/1.1\r\n\
             Host: $HOST\r\n\
-            User-Agent: $USERAGENT\r\n\
-            Accept: */*\r\n\
             Content-Type: multipart/form-data; boundary={}\r\n\
             Content-Length: 123\r\n\
+            User-Agent: $USERAGENT\r\n\
+            Accept: */*\r\n\
             Accept-Encoding: gzip\r\n\
             \r\n\
             {}\
