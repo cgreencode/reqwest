@@ -12,7 +12,7 @@ categories = ["web-programming::http-client"]
 [dependencies]
 bytes = "0.4"
 futures = "0.1.15"
-hyper = "0.11"
+hyper = "0.11.9"
 hyper-tls = "0.1.2"
 libflate = "0.1.11"
 log = "0.3"
@@ -26,8 +26,6 @@ tokio-io = "0.1"
 tokio-tls = "0.1"
 url = "1.2"
 uuid = { version = "0.5", features = ["v4"] }
-hyper-proxy = { version = "0.2.0", path = "../hyper-proxy" }
-#hyper-proxy = "0.2.0"
 
 [dev-dependencies]
 env_logger = "0.4"

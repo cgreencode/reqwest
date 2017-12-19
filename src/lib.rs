@@ -132,7 +132,6 @@ extern crate bytes;
 #[macro_use]
 extern crate futures;
 extern crate hyper;
-extern crate hyper_proxy;
 extern crate hyper_tls;
 #[macro_use]
 extern crate log;
@@ -171,6 +170,7 @@ pub use self::tls::{Certificate, Identity};
 mod error;
 
 mod async_impl;
+mod connect;
 mod body;
 mod client;
 mod into_url;

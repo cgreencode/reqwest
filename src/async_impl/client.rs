@@ -1,14 +1,12 @@
-use std::{io, fmt};
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
 use futures::{Async, Future, Poll};
-use hyper::client::{Connect, FutureResponse, HttpConnector};
+use hyper::client::FutureResponse;
 use hyper::header::{Headers, Location, Referer, UserAgent, Accept, Encoding,
                     AcceptEncoding, Range, qitem};
-use hyper_proxy::Intercept;
-use hyper_tls::HttpsConnector;
 use native_tls::{TlsConnector, TlsConnectorBuilder};
 use tokio_core::reactor::Handle;
 
@@ -16,6 +14,7 @@ use tokio_core::reactor::Handle;
 use super::body;
 use super::request::{self, Request, RequestBuilder};
 use super::response::{self, Response};
+use connect::Connector;
 use into_url::to_uri;
 use redirect::{self, RedirectPolicy, check_redirect, remove_sensitive_headers};
 use {Certificate, Identity, IntoUrl, Method, proxy, Proxy, StatusCode, Url};
@@ -66,8 +65,7 @@ struct Config {
     gzip: bool,
     headers: Headers,
     hostname_verification: bool,
-    // TODO: investigate Vec<Proxy> as before
-    proxy: Proxy,
+    proxies: Vec<Proxy>,
     redirect_policy: RedirectPolicy,
     referer: bool,
     timeout: Option<Duration>,
@@ -89,7 +87,7 @@ impl ClientBuilder {
                         gzip: true,
                         headers: headers,
                         hostname_verification: true,
-                        proxy: Proxy::empty(),
+                        proxies: Vec::new(),
                         redirect_policy: RedirectPolicy::default(),
                         referer: true,
                         timeout: None,
@@ -124,26 +122,26 @@ impl ClientBuilder {
             .take()
             .expect("ClientBuilder cannot be reused after building a Client");
 
-
-        let mut https_connector = try_!(HttpsConnector::new(config.dns_threads, handle));
-        if !config.hostname_verification {
-            https_connector.danger_disable_hostname_verification(true);
-        }
-        let intercept = config.proxy.inner.intercept().clone();
-        let mut connector = config.proxy.inner.with_connector(https_connector);
         let tls = try_!(config.tls.build());
-        connector.set_tls(Some(tls));
+
+        let proxies = Arc::new(config.proxies);
+
+        let mut connector = Connector::new(config.dns_threads, tls, proxies.clone(), handle);
+        if !config.hostname_verification {
+            connector.danger_disable_hostname_verification();
+        }
 
         let hyper_client = ::hyper::Client::configure()
             .connector(connector)
+            .no_proto()
             .build(handle);
 
         Ok(Client {
             inner: Arc::new(ClientRef {
                 gzip: config.gzip,
                 hyper: hyper_client,
-                intercept: intercept,
                 headers: config.headers,
+                proxies: proxies,
                 redirect_policy: config.redirect_policy,
                 referer: config.referer,
             }),
@@ -225,7 +223,7 @@ impl ClientBuilder {
     #[inline]
     pub fn proxy(&mut self, proxy: Proxy) -> &mut ClientBuilder {
         if let Some(config) = config_mut(&mut self.config, &self.err) {
-            config.proxy = proxy;
+            config.proxies.push(proxy);
         }
         self
     }
@@ -279,7 +277,7 @@ fn config_mut<'a>(config: &'a mut Option<Config>, err: &Option<::Error>) -> Opti
     }
 }
 
-type HyperClient = ::hyper::Client<::hyper_proxy::Proxy<HttpsConnector<HttpConnector>>>;
+type HyperClient = ::hyper::Client<Connector>;
 
 impl Client {
     /// Constructs a new `Client`.
@@ -415,9 +413,12 @@ impl Client {
             reusable
         });
 
-        if self.inner.intercept.matches(&uri) && uri.scheme() == Some("http") {
-            req.set_proxy(true);
+        if proxy::is_proxied(&self.inner.proxies, &url) {
+            if uri.scheme() == Some("http") {
+                req.set_proxy(true);
+            }
         }
+
         let in_flight = self.inner.hyper.request(req);
 
         Pending {
@@ -457,8 +458,8 @@ impl fmt::Debug for ClientBuilder {
 struct ClientRef {
     gzip: bool,
     headers: Headers,
-    intercept: Intercept,
     hyper: HyperClient,
+    proxies: Arc<Vec<Proxy>>,
     redirect_policy: RedirectPolicy,
     referer: bool,
 }
@@ -556,8 +557,10 @@ impl Future for PendingRequest {
                             if let Some(Some(ref body)) = self.body {
                                 req.set_body(body.clone());
                             }
-                            if self.client.intercept.matches(&uri) && uri.scheme() == Some("http") {
-                                req.set_proxy(true);
+                            if proxy::is_proxied(&self.client.proxies, &self.url) {
+                                if uri.scheme() == Some("http") {
+                                    req.set_proxy(true);
+                                }
                             }
                             self.in_flight = self.client.hyper.request(req);
                             continue;
