@@ -1,9 +1,3 @@
-## v0.8.3
-
-### Features
-
-- Upgrades internal log crate usage to v0.4
-
 ## v0.8.2
 
 ### Fixes

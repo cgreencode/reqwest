@@ -1,7 +1,7 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/reqwest/0.8.3")]
+#![doc(html_root_url = "https://docs.rs/reqwest/0.8.2")]
 
 //! # reqwest
 //!
@@ -132,6 +132,7 @@ extern crate bytes;
 #[macro_use]
 extern crate futures;
 extern crate hyper;
+extern crate hyper_proxy;
 extern crate hyper_tls;
 #[macro_use]
 extern crate log;
@@ -139,6 +140,9 @@ extern crate libflate;
 extern crate mime_guess;
 extern crate native_tls;
 extern crate serde;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 extern crate serde_urlencoded;
 extern crate tokio_core;
@@ -170,7 +174,6 @@ pub use self::tls::{Certificate, Identity};
 mod error;
 
 mod async_impl;
-mod connect;
 mod body;
 mod client;
 mod into_url;
